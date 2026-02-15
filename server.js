@@ -1,6 +1,3 @@
-// Instagram Caption Extractor - Backend Server
-// Node.js + Express
-
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
@@ -8,103 +5,92 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public')); // Serve static files
+app.use(express.static('public'));
 
-// Extract shortcode from Instagram URL
 function extractShortcode(url) {
     const match = url.match(/\/(reel|reels|p)\/([A-Za-z0-9_-]+)/);
     return match ? match[2] : null;
 }
 
-// Method 1: Try Instagram's embed endpoint
-async function getInstagramData(shortcode) {
+// Improved Instagram scraping with better headers
+async function getInstagramCaption(url) {
     try {
-        const url = `https://www.instagram.com/p/${shortcode}/?__a=1&__d=dis`;
-        
-        const response = await axios.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-            }
-        });
-
-        // Try to extract caption from response
-        if (response.data) {
-            const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
-            
-            // Navigate the Instagram API response structure
-            const edges = data?.items?.[0] || data?.graphql?.shortcode_media;
-            
-            if (edges) {
-                const caption = edges.edge_media_to_caption?.edges?.[0]?.node?.text ||
-                               edges.caption?.text ||
-                               edges.title ||
-                               '';
-                
-                return {
-                    success: true,
-                    caption: caption,
-                    username: edges.owner?.username || 'Unknown',
-                    likes: edges.like_count || edges.edge_liked_by?.count || 0
-                };
-            }
+        const shortcode = extractShortcode(url);
+        if (!shortcode) {
+            return { success: false, error: 'Invalid URL format' };
         }
-        
-        return { success: false, error: 'Could not extract caption' };
-    } catch (error) {
-        console.error('Instagram API Error:', error.message);
-        return { success: false, error: error.message };
-    }
-}
 
-// Method 2: Alternative scraping method
-async function scrapeInstagramPage(url) {
-    try {
-        const response = await axios.get(url, {
+        // Method 1: Try embed endpoint
+        const embedUrl = `https://www.instagram.com/p/${shortcode}/embed/captioned/`;
+        
+        const response = await axios.get(embedUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            }
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Referer': 'https://www.instagram.com/',
+                'Connection': 'keep-alive',
+            },
+            timeout: 10000
         });
 
         const html = response.data;
         
-        // Try to find caption in the HTML
-        // Instagram embeds data in <script> tags
-        const scriptMatch = html.match(/<script type="application\/ld\+json">(.*?)<\/script>/s);
+        // Extract caption from HTML
+        let caption = null;
         
-        if (scriptMatch) {
-            const jsonData = JSON.parse(scriptMatch[1]);
-            if (jsonData.caption) {
-                return {
-                    success: true,
-                    caption: jsonData.caption,
-                    method: 'scraping'
-                };
+        // Try multiple patterns
+        const patterns = [
+            /<meta property="og:description" content="([^"]*)">/,
+            /<div class="Caption">([^<]*)<\/div>/,
+            /"caption":"([^"]*)">/,
+            /window\._sharedData = ({.+});<\/script>/
+        ];
+
+        for (const pattern of patterns) {
+            const match = html.match(pattern);
+            if (match && match[1]) {
+                caption = match[1];
+                // Decode HTML entities
+                caption = caption
+                    .replace(/&quot;/g, '"')
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&#039;/g, "'")
+                    .replace(/\\n/g, '\n')
+                    .replace(/\\u([0-9a-fA-F]{4})/g, (match, hex) => 
+                        String.fromCharCode(parseInt(hex, 16))
+                    );
+                break;
             }
         }
 
-        // Alternative: Look for meta tags
-        const metaMatch = html.match(/<meta property="og:description" content="(.*?)"/);
-        if (metaMatch) {
+        if (caption && caption.trim()) {
             return {
                 success: true,
-                caption: metaMatch[1],
-                method: 'meta-tags'
+                caption: caption.trim()
             };
         }
 
-        return { success: false, error: 'Caption not found in page' };
+        // Fallback: Return a helpful message
+        return {
+            success: false,
+            error: 'Could not extract caption. The reel might be private or Instagram is blocking automated requests. Try a different public reel from a verified account.'
+        };
+
     } catch (error) {
-        console.error('Scraping Error:', error.message);
-        return { success: false, error: error.message };
+        console.error('Error:', error.message);
+        return {
+            success: false,
+            error: 'Failed to fetch caption. Please try again with a public reel from a popular account.'
+        };
     }
 }
 
-// Main API endpoint
 app.post('/api/extract-caption', async (req, res) => {
     try {
         const { url } = req.body;
@@ -116,7 +102,6 @@ app.post('/api/extract-caption', async (req, res) => {
             });
         }
 
-        // Validate Instagram URL
         const instagramPattern = /^https?:\/\/(www\.)?(instagram\.com|instagr\.am)\/(reel|reels|p)\/[\w-]+/i;
         if (!instagramPattern.test(url)) {
             return res.status(400).json({
@@ -125,53 +110,33 @@ app.post('/api/extract-caption', async (req, res) => {
             });
         }
 
-        const shortcode = extractShortcode(url);
-        if (!shortcode) {
-            return res.status(400).json({
-                success: false,
-                error: 'Could not extract shortcode from URL'
-            });
-        }
-
-        // Try different methods
-        let result = await getInstagramData(shortcode);
+        const result = await getInstagramCaption(url);
         
-        if (!result.success) {
-            result = await scrapeInstagramPage(url);
-        }
-
         if (result.success) {
             res.json(result);
         } else {
-            res.status(500).json({
-                success: false,
-                error: 'Could not fetch caption. The reel might be private or Instagram blocked the request.'
-            });
+            res.status(500).json(result);
         }
 
     } catch (error) {
         console.error('Server Error:', error);
         res.status(500).json({
             success: false,
-            error: 'Internal server error'
+            error: 'Internal server error. Please try again.'
         });
     }
 });
 
-// Health check endpoint
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', message: 'Server is running' });
 });
 
-// Serve the frontend
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/public/index.html');
 });
 
-// Start server
 app.listen(PORT, () => {
-    console.log(`🚀 Server is running on http://localhost:${PORT}`);
-    console.log(`📝 Instagram Caption Extractor API ready!`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
 
 module.exports = app;
