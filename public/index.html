@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram Caption Extractor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .container {
+            flex: 1;
+            max-width: 600px;
+            margin: 0 auto;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .icon {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 15px 50px 15px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        input[type="text"]:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .clear-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 20px;
+            padding: 5px 10px;
+            display: none;
+        }
+
+        .clear-btn:hover {
+            color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loader {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .loader.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .result-box {
+            display: none;
+            margin-top: 20px;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .result-box.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .caption-container {
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .caption-text {
+            color: #333;
+            line-height: 1.6;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .copy-btn {
+            width: 100%;
+            padding: 12px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .copy-btn:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        .copy-btn.copied {
+            background: #667eea;
+        }
+
+        .error-box {
+            display: none;
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 12px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .error-box.active {
+            display: block;
+        }
+
+        .error-text {
+            color: #856404;
+            font-size: 14px;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 30px;
+            font-size: 14px;
+        }
+
+        .instructions {
+            background: #e8f4f8;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+
+        .info-badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 600px) {
+            .card { padding: 25px; }
+            .header h1 { font-size: 24px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header">
+                <div class="icon">📝</div>
+                <h1>Instagram Caption Extractor</h1>
+                <p>Extract captions from Instagram Reels</p>
+            </div>
+
+            <div class="instructions">
+                <strong>📌 How to use:</strong>
+                <ol style="margin-left: 20px; margin-top: 8px;">
+                    <li>Open Instagram → Find a reel</li>
+                    <li>Tap Share → Copy Link</li>
+                    <li>Paste link below → Click "Get Caption"</li>
+                </ol>
+            </div>
+
+            <div class="input-group">
+                <label>Instagram Reel URL</label>
+                <div class="input-wrapper">
+                    <input 
+                        type="text" 
+                        id="reelUrl" 
+                        placeholder="https://www.instagram.com/reel/..."
+                    >
+                    <button class="clear-btn" id="clearBtn" onclick="clearInput()">×</button>
+                </div>
+            </div>
+
+            <button class="btn" id="extractBtn" onclick="extractCaption()">
+                Get Caption
+            </button>
+
+            <div class="loader" id="loader">
+                <div class="spinner"></div>
+                <p style="margin-top: 10px; color: #667eea; font-weight: 600;">Fetching caption...</p>
+            </div>
+
+            <div class="error-box" id="errorBox">
+                <div class="error-text" id="errorMessage"></div>
+            </div>
+
+            <div class="result-box" id="resultBox">
+                <div class="caption-container">
+                    <div class="caption-text" id="captionText"></div>
+                </div>
+                <button class="copy-btn" id="copyBtn" onclick="copyCaption()">
+                    <span id="copyIcon">📋</span>
+                    <span id="copyText">Copy Caption</span>
+                </button>
+                <div class="info-badge" id="captionLength"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        Made for educational purposes 📚
+    </div>
+
+    <script>
+        // Configuration - Update this URL when deploying
+        const API_URL = window.location.origin + '/api/extract-caption';
+        // For local testing: const API_URL = 'http://localhost:3000/api/extract-caption';
+
+        const urlInput = document.getElementById('reelUrl');
+        const clearBtn = document.getElementById('clearBtn');
+
+        urlInput.addEventListener('input', function() {
+            clearBtn.style.display = this.value ? 'block' : 'none';
+        });
+
+        function clearInput() {
+            urlInput.value = '';
+            clearBtn.style.display = 'none';
+            hideError();
+            hideResult();
+        }
+
+        function showLoader() {
+            document.getElementById('loader').classList.add('active');
+            document.getElementById('extractBtn').disabled = true;
+        }
+
+        function hideLoader() {
+            document.getElementById('loader').classList.remove('active');
+            document.getElementById('extractBtn').disabled = false;
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = '⚠️ ' + message;
+            document.getElementById('errorBox').classList.add('active');
+            hideResult();
+        }
+
+        function hideError() {
+            document.getElementById('errorBox').classList.remove('active');
+        }
+
+        function showResult(caption, length) {
+            document.getElementById('captionText').textContent = caption;
+            document.getElementById('captionLength').textContent = `${length} characters`;
+            document.getElementById('resultBox').classList.add('active');
+        }
+
+        function hideResult() {
+            document.getElementById('resultBox').classList.remove('active');
+        }
+
+        async function extractCaption() {
+            const url = urlInput.value.trim();
+
+            if (!url) {
+                showError('Please enter an Instagram URL');
+                return;
+            }
+
+            const pattern = /^https?:\/\/(www\.)?(instagram\.com|instagr\.am)\/(reel|reels|p)\/[\w-]+/i;
+            if (!pattern.test(url)) {
+                showError('Invalid Instagram URL');
+                return;
+            }
+
+            hideError();
+            hideResult();
+            showLoader();
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url })
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.caption) {
+                    showResult(data.caption, data.caption.length);
+                } else {
+                    showError(data.error || 'Could not fetch caption');
+                }
+            } catch (error) {
+                showError('Network error. Please check your connection.');
+            } finally {
+                hideLoader();
+            }
+        }
+
+        async function copyCaption() {
+            const caption = document.getElementById('captionText').textContent;
+            
+            try {
+                await navigator.clipboard.writeText(caption);
+                const btn = document.getElementById('copyBtn');
+                btn.classList.add('copied');
+                document.getElementById('copyIcon').textContent = '✓';
+                document.getElementById('copyText').textContent = 'Copied!';
+                
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    document.getElementById('copyIcon').textContent = '📋';
+                    document.getElementById('copyText').textContent = 'Copy Caption';
+                }, 2000);
+            } catch (error) {
+                showError('Failed to copy');
+            }
+        }
+
+        urlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') extractCaption();
+        });
+    </script>
+</body>
+</html>
